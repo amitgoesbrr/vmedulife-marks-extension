@@ -5,7 +5,7 @@ Thank you for your interest in contributing to vmedulife-marks-extension!
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/your-username/vmedulife-marks-extension.git`
+2. Clone your fork: `git clone https://github.com/amitgoesbrr/vmedulife-marks-extension.git`
 3. Install in Chrome via `chrome://extensions/` (Developer mode → Load unpacked)
 
 ## Development Workflow
