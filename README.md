@@ -142,3 +142,12 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 ## License
 
 This project is for educational and personal use. The extension is provided as-is.
+
+## Disclaimer
+
+**This extension is made for educational purposes only.**
+
+- It is **not endorsed by** VMedulife, or any institute using the VMedulife portal
+- It does not modify any server data — it only reads API responses already sent to your browser
+- Use at your own risk. I am **not responsible** for any misuse, incorrect data display, or any issues arising from using this extension
+- If VMedulife or your institute has concerns about this project, please reach out and I will address it
