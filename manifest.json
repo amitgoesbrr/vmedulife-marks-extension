@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "vmedulife-marks-extension",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Reveals hidden numeric marks on the VMedulife student portal — view detailed internal, external, and practical scores that the portal only shows as letter grades.",
   "permissions": ["storage"],
   "content_scripts": [

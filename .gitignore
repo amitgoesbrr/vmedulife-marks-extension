@@ -1,0 +1,26 @@
+# Test files
+test.html
+test*.html
+
+# OS generated
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Packed extension output
+*.zip
+*.crx
+*.pem
+
+# Node (if added later)
+node_modules/
+package-lock.json
+
+# Misc
+*.log

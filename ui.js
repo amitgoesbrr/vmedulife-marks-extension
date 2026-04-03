@@ -64,6 +64,9 @@
   /** @type {string} CSS selector prefix for max specificity */
   var P = '#' + PANEL_ID;
 
+  /** @type {?Object} Stores the last parsed result for export functions */
+  var _lastResult = null;
+
   /**
    * Grade-to-color mapping for visual grade pills
    * @type {Object.<string, string>}
@@ -189,6 +192,206 @@
       .replace('  ', ' ').trim();
     if (s.length > 14) s = s.substring(0, 12) + '…';
     return s;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Export Functions
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Triggers a file download in the browser.
+   * @param {string} content - File content
+   * @param {string} filename - Download filename
+   * @param {string} mimeType - MIME type for the blob
+   */
+  function downloadFile(content, filename, mimeType) {
+    var blob = new Blob([content], { type: mimeType });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 200);
+  }
+
+  /**
+   * Generates a CSV string from parsed result data.
+   * @param {Object} r - Parsed result object from parseResult()
+   * @returns {string} CSV content
+   */
+  function generateCSV(r) {
+    var lines = [];
+    lines.push('Student Name,PRN,Semester,Branch,SGPA,Total Credits,Earned Credits,Failed Subjects');
+    lines.push(
+      '"' + r.name + '",' +
+      '"' + r.prn + '",' +
+      '"' + r.sem + '",' +
+      '"' + r.branch + '",' +
+      (!isFinite(r.sgpa) ? 'N/A' : r.sgpa) + ',' +
+      r.totCr + ',' + r.earnCr + ',' + r.fails
+    );
+    lines.push('');
+    lines.push('Subject,Code,Type,Overall,Max,Percentage,Grade,GP,Credits,Obtained Credits,Credit Points,Internal Scored,Internal Max,Internal %,External Scored,External Max,External %,Practical Scored,Practical Max,Practical %');
+    r.subs.forEach(function (s) {
+      var row = [
+        '"' + (s.name || '').replace(/"/g, '""') + '"',
+        '"' + (s.code || '').replace(/"/g, '""') + '"',
+        s.type,
+        isNaN(s.overall) ? '' : s.overall,
+        isNaN(s.max) ? '' : s.max,
+        isNaN(s.pct) ? '' : s.pct,
+        s.grade,
+        isNaN(s.gp) ? '' : s.gp,
+        isNaN(s.credits) ? '' : s.credits,
+        isNaN(s.obtCrd) ? '' : s.obtCrd,
+        isNaN(s.cp) ? '' : s.cp,
+        s.type === 'theory' ? (isNaN(s.intSec) ? '' : s.intSec) : '',
+        s.type === 'theory' ? (isNaN(s.intMax) ? '' : s.intMax) : '',
+        s.type === 'theory' ? (isNaN(s.intPct) ? '' : Math.round(s.intPct)) : '',
+        s.type === 'theory' ? (isNaN(s.extSec) ? '' : s.extSec) : '',
+        s.type === 'theory' ? (isNaN(s.extMax) ? '' : s.extMax) : '',
+        s.type === 'theory' ? (isNaN(s.extPct) ? '' : s.extPct.toFixed(1)) : '',
+        s.type === 'practical' ? (isNaN(s.practSec) ? '' : s.practSec) : '',
+        s.type === 'practical' ? (isNaN(s.practMax) ? '' : s.practMax) : '',
+        s.type === 'practical' ? (isNaN(s.practPct) ? '' : s.practPct) : ''
+      ];
+      lines.push(row.join(','));
+    });
+    return lines.join('\r\n');
+  }
+
+  /** Downloads marks data as a CSV file. */
+  function downloadCSV() {
+    if (!_lastResult) return;
+    var r = _lastResult;
+    var filename = 'marks_' + r.name.replace(/\s+/g, '_') + '_Sem' + r.sem + '.csv';
+    downloadFile(generateCSV(r), filename, 'text/csv;charset=utf-8');
+  }
+
+  /**
+   * Builds a styled HTML document for print/PDF export.
+   * @param {Object} r - Parsed result object
+   * @returns {string} Complete HTML document string
+   */
+  function buildPrintHTML(r) {
+    var theory = r.subs.filter(function (s) { return s.type === 'theory'; });
+    var pract = r.subs.filter(function (s) { return s.type === 'practical'; });
+    var gc = { O:'#0d9488', E:'#2563eb', A:'#16a34a', B:'#ea580c', C:'#dc2626', D:'#991b1b', F:'#7f1d1d' };
+    var h = '<!DOCTYPE html><html><head><meta charset="utf-8">';
+    h += '<title>Marks Report — ' + esc(r.name) + ' — Semester ' + esc(r.sem) + '</title>';
+    h += '<style>';
+    h += '@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");';
+    h += '*{margin:0;padding:0;box-sizing:border-box}';
+    h += 'body{font-family:"Inter",system-ui,sans-serif;color:#1a1a1a;padding:48px;font-size:12px;line-height:1.5}';
+    h += '.hdr{margin-bottom:28px;border-bottom:2px solid #111;padding-bottom:14px}';
+    h += '.hdr h1{font-size:22px;font-weight:700;margin-bottom:4px}';
+    h += '.hdr .meta{color:#666;font-size:12px} .hdr .meta span{margin-right:16px}';
+    h += '.sts{display:flex;gap:40px;margin-bottom:24px;padding:14px 0;border-bottom:1px solid #e5e5e5}';
+    h += '.st{text-align:center} .st .lb{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#888;font-weight:600}';
+    h += '.st .vl{font-size:24px;font-weight:700;color:#111;margin:4px 0 2px} .st .sb{font-size:11px;color:#888}';
+    h += '.sec{margin-bottom:24px} .sec h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#444;font-weight:700;margin-bottom:10px;border-bottom:1px solid #e5e5e5;padding-bottom:6px}';
+    h += 'table{width:100%;border-collapse:collapse;margin-bottom:6px}';
+    h += 'th{background:#f8f8f8;border:1px solid #ddd;padding:7px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.03em;color:#555;font-weight:600}';
+    h += 'td{border:1px solid #ddd;padding:7px 8px;font-size:12px}';
+    h += '.n{text-align:right;font-variant-numeric:tabular-nums} .c{text-align:center}';
+    h += '.gr{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:3px;color:#fff;font-weight:700;font-size:10px}';
+    h += '.nt{font-size:11px;color:#888;margin-top:6px;line-height:1.6;padding:8px;background:#f8f8f8;border-radius:4px}';
+    h += '.ft{margin-top:28px;padding-top:10px;border-top:1px solid #e5e5e5;font-size:10px;color:#aaa;text-align:center}';
+    h += '@media print{@page{margin:12mm 15mm}body{padding:0}.np{display:none}}';
+    h += '</style></head><body>';
+    // Header
+    h += '<div class="hdr"><h1>' + esc(r.name) + '</h1><div class="meta">';
+    h += '<span><strong>PRN:</strong> ' + esc(r.prn) + '</span>';
+    h += '<span><strong>Semester:</strong> ' + esc(r.sem) + '</span>';
+    if (r.branch) h += '<span><strong>Branch:</strong> ' + esc(r.branch) + '</span>';
+    if (r.year) h += '<span><strong>Year:</strong> ' + esc(r.year) + '</span>';
+    h += '</div></div>';
+    // Stats
+    h += '<div class="sts">';
+    h += '<div class="st"><div class="lb">SGPA</div><div class="vl">' + (!isFinite(r.sgpa) ? 'N/A' : r.sgpa.toFixed(2)) + '</div><div class="sb">Semester ' + esc(r.sem) + '</div></div>';
+    h += '<div class="st"><div class="lb">Credits</div><div class="vl">' + r.earnCr + '</div><div class="sb">of ' + r.totCr + ' total</div></div>';
+    h += '<div class="st"><div class="lb">Subjects</div><div class="vl">' + r.subs.length + '</div><div class="sb">' + r.thCt + ' theory, ' + r.prCt + ' practical</div></div>';
+    h += '<div class="st"><div class="lb">Failed</div><div class="vl" style="color:' + (r.fails > 0 ? '#dc2626' : '#16a34a') + '">' + r.fails + '</div><div class="sb">' + (r.fails > 0 ? r.fails + ' failed' : 'All passed') + '</div></div>';
+    h += '</div>';
+    // Subject-wise
+    h += '<div class="sec"><h2>Subject-wise Result</h2><table><thead><tr>';
+    h += '<th style="text-align:left">Subject</th><th>Code</th><th>Type</th><th>Marks</th><th>%</th><th>Grade</th><th>GP</th><th>Credits</th><th>CP</th>';
+    h += '</tr></thead><tbody>';
+    r.subs.forEach(function (s) {
+      h += '<tr><td style="text-align:left;font-weight:600">' + esc(s.name) + '</td>';
+      h += '<td class="c">' + esc(s.code) + '</td><td class="c">' + (s.type === 'practical' ? 'PR' : 'TH') + '</td>';
+      h += '<td class="n">' + (isNaN(s.overall) ? '-' : Math.round(s.overall)) + '/' + (isNaN(s.max) ? '-' : Math.round(s.max)) + '</td>';
+      h += '<td class="n">' + (isNaN(s.pct) ? '-' : Math.round(s.pct)) + '%</td>';
+      h += '<td class="c"><span class="gr" style="background:' + (gc[s.grade] || gc.F) + '">' + s.grade + '</span></td>';
+      h += '<td class="n">' + (isNaN(s.gp) ? '-' : s.gp) + '</td><td class="n">' + (isNaN(s.credits) ? '-' : s.credits) + '</td><td class="n">' + (isNaN(s.cp) ? '-' : s.cp) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    // Theory detail
+    if (theory.length > 0) {
+      h += '<div class="sec"><h2>Theory — Detailed Breakdown</h2><table><thead><tr>';
+      h += '<th rowspan="2" style="text-align:left;vertical-align:middle">Subject</th>';
+      h += '<th colspan="2" style="text-align:center">Internal (40)</th>';
+      h += '<th colspan="2" style="text-align:center">External (60)</th>';
+      h += '<th colspan="2" style="text-align:center">Total (100)</th>';
+      h += '<th rowspan="2" style="text-align:center;vertical-align:middle">Grade</th></tr><tr>';
+      h += '<th class="c">Scored</th><th class="c">%</th><th class="c">Scored</th><th class="c">%</th><th class="c">Scored</th><th class="c">%</th></tr></thead><tbody>';
+      theory.forEach(function (s) {
+        h += '<tr><td style="text-align:left"><strong>' + esc(s.name) + '</strong> <span style="color:#888;font-size:10px">' + esc(s.code) + '</span></td>';
+        h += '<td class="c">' + (isNaN(s.intSec) ? '-' : s.intSec) + '/' + (isNaN(s.intMax) ? '-' : s.intMax) + '</td>';
+        h += '<td class="c">' + (isNaN(s.intPct) ? '-' : Math.round(s.intPct) + '%') + '</td>';
+        h += '<td class="c">' + (isNaN(s.extSec) ? '-' : s.extSec) + '/' + (isNaN(s.extMax) ? '-' : s.extMax) + '</td>';
+        h += '<td class="c">' + (isNaN(s.extPct) ? '-' : s.extPct.toFixed(1) + '%') + '</td>';
+        h += '<td class="c">' + (isNaN(s.overall) ? '-' : Math.round(s.overall)) + '/' + (isNaN(s.max) ? '-' : Math.round(s.max)) + '</td>';
+        h += '<td class="c">' + (isNaN(s.pct) ? '-' : Math.round(s.pct) + '%') + '</td>';
+        h += '<td class="c"><span class="gr" style="background:' + (gc[s.grade] || gc.F) + '">' + s.grade + '</span></td></tr>';
+      });
+      h += '</tbody></table>';
+      h += '<div class="nt">Internal (40) = mid-sem (20) + assignments (20). Pass: external ≥ 35% (21/60), overall ≥ 40%.</div></div>';
+    }
+    // Practical
+    if (pract.length > 0) {
+      h += '<div class="sec"><h2>Practical Subjects</h2><table><thead><tr>';
+      h += '<th style="text-align:left">Subject</th><th>Scored</th><th>Out of</th><th>%</th><th>Grade</th><th>Credits</th></tr></thead><tbody>';
+      pract.forEach(function (s) {
+        h += '<tr><td style="text-align:left"><strong>' + esc(s.name) + '</strong> <span style="color:#888;font-size:10px">' + esc(s.code) + '</span></td>';
+        h += '<td class="c">' + (isNaN(s.practSec) ? '-' : s.practSec) + '</td><td class="c">' + (isNaN(s.practMax) ? '-' : s.practMax) + '</td>';
+        h += '<td class="c">' + (isNaN(s.practPct) ? '-' : Math.round(s.practPct) + '%') + '</td>';
+        h += '<td class="c"><span class="gr" style="background:' + (gc[s.grade] || gc.F) + '">' + s.grade + '</span></td>';
+        h += '<td class="c">' + (isNaN(s.credits) ? '-' : s.credits) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    // Comparison
+    if (theory.length > 0) {
+      h += '<div class="sec"><h2>Internal vs External Comparison</h2><table><thead><tr>';
+      h += '<th style="text-align:left">Subject</th><th>Internal</th><th>External</th><th style="text-align:right">Observation</th></tr></thead><tbody>';
+      theory.forEach(function (s) {
+        var ip = isNaN(s.intPct) ? 0 : Math.round(s.intPct);
+        var ep = isNaN(s.extPct) ? 0 : Math.round(s.extPct);
+        var obs = getObservation(ip, ep);
+        h += '<tr><td style="text-align:left;font-weight:600">' + esc(s.name) + '</td>';
+        h += '<td class="c">' + (isNaN(s.intSec) ? '-' : s.intSec) + '/' + (isNaN(s.intMax) ? '-' : s.intMax) + ' — ' + ip + '%</td>';
+        h += '<td class="c">' + (isNaN(s.extSec) ? '-' : s.extSec) + '/' + (isNaN(s.extMax) ? '-' : s.extMax) + ' — ' + ep + '%</td>';
+        h += '<td style="text-align:right;color:' + obs.color + '">' + obs.text + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '<div class="ft">Generated by vmedulife-marks-extension · ' + new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) + '</div>';
+    h += '<div class="np" style="text-align:center;margin-top:20px"><button onclick="window.print()" style="font-family:Inter,sans-serif;font-size:14px;font-weight:600;padding:10px 24px;background:#111;color:#fff;border:none;border-radius:8px;cursor:pointer">Print / Save as PDF</button></div>';
+    h += '</body></html>';
+    return h;
+  }
+
+  /** Opens a print-ready page for PDF download. */
+  function downloadPDF() {
+    if (!_lastResult) return;
+    var w = window.open('', '_blank');
+    if (!w) { alert('Please allow popups for this site to download PDF.'); return; }
+    w.document.write(buildPrintHTML(_lastResult));
+    w.document.close();
+    setTimeout(function () { w.focus(); w.print(); }, 600);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -476,9 +679,19 @@
               '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>' +
               '<span>vmedulife-marks-extension</span>' +
             '</div>' +
-            '<button class="vm-close" id="vmedulife-marks-close" aria-label="Close">' +
-              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
-            '</button>' +
+            '<div class="vm-hactions">' +
+              '<button class="vm-dl vm-dl-pdf" id="vmedulife-dl-pdf" title="Download as PDF">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+                '<span>PDF</span>' +
+              '</button>' +
+              '<button class="vm-dl vm-dl-csv" id="vmedulife-dl-csv" title="Download as CSV">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+                '<span>CSV</span>' +
+              '</button>' +
+              '<button class="vm-close" id="vmedulife-marks-close" aria-label="Close">' +
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+              '</button>' +
+            '</div>' +
           '</div>' +
           '<div class="vm-body">' +
             h.join('\n') +
@@ -599,6 +812,15 @@
 ' + P + ' .vm-b { width:18px!important; border-radius:4px 4px 0 0!important; transition:height 0.6s cubic-bezier(0.4,0,0.2,1)!important; }\n\
 ' + P + ' .vm-bx { font-size:11px!important; color:#b3b3b3!important; text-align:center!important; width:60px!important; margin-top:8px!important; overflow:hidden!important; text-overflow:ellipsis!important; white-space:nowrap!important; padding:0!important; border:none!important; }\n\
 \n\
+/* ═══ DOWNLOAD BUTTONS ═══ */\n\
+' + P + ' .vm-hactions { display:flex!important; align-items:center!important; gap:8px!important; }\n\
+' + P + ' .vm-dl { display:flex!important; align-items:center!important; gap:6px!important; padding:6px 14px!important; border-radius:6px!important; font-size:12px!important; font-weight:600!important; cursor:pointer!important; border:1px solid!important; transition:all 0.15s!important; letter-spacing:0.02em!important; }\n\
+' + P + ' .vm-dl span { color:inherit!important; font-size:12px!important; }\n\
+' + P + ' .vm-dl-pdf { background:rgba(239,68,68,0.1)!important; color:#f87171!important; border-color:rgba(239,68,68,0.25)!important; }\n\
+' + P + ' .vm-dl-pdf:hover { background:rgba(239,68,68,0.2)!important; color:#fca5a5!important; }\n\
+' + P + ' .vm-dl-csv { background:rgba(34,197,94,0.1)!important; color:#4ade80!important; border-color:rgba(34,197,94,0.25)!important; }\n\
+' + P + ' .vm-dl-csv:hover { background:rgba(34,197,94,0.2)!important; color:#86efac!important; }\n\
+\n\
 /* ═══ RESPONSIVE ═══ */\n\
 @media(max-width:880px) {\n\
   ' + P + ' .vm-panel { width:100vw!important; }\n\
@@ -699,6 +921,7 @@
       return;
     }
 
+    _lastResult = r;
     log('parsed:', r.name, '|', r.subs.length, 'subjects');
     if (r.subs.length === 0) {
       try { injectStyles(); } catch (e) { log('style error:', e); }
@@ -726,6 +949,11 @@
 
     document.getElementById('vmedulife-marks-close').addEventListener('click', closePanel);
     panel.querySelector('.vm-backdrop').addEventListener('click', closePanel);
+
+    var pdfBtn = document.getElementById('vmedulife-dl-pdf');
+    var csvBtn = document.getElementById('vmedulife-dl-csv');
+    if (pdfBtn) pdfBtn.addEventListener('click', downloadPDF);
+    if (csvBtn) csvBtn.addEventListener('click', downloadCSV);
 
     if (_kh) document.removeEventListener('keydown', _kh);
     _kh = function (e) { if (e.key === 'Escape') closePanel(); };

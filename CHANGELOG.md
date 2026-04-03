@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.0] - 2026-04-03
+
+### Added
+
+- **PDF Download** — New "PDF" button in the panel header opens a print-ready page with all marks data, styled with Inter font, grade badges, and all 5 data sections. Users can save as PDF via Chrome's print dialog.
+- **CSV Download** — New "CSV" button in the panel header downloads a comprehensive CSV file with student info, all subject marks, internal/external breakdowns, and practical scores. Opens directly in Excel/Google Sheets.
+- **Download buttons** — Color-coded action buttons (red for PDF, green for CSV) placed in the header alongside the close button for easy access.
+- **Print-ready layout** — PDF export includes student header, stats dashboard, subject-wise table, theory detail, practical breakdown, and internal vs external comparison with auto-generated footer.
+- **Smart filenames** — CSV files auto-named as `marks_StudentName_SemX.csv` for easy organization.
+
 ## [1.0.1] - 2026-04-02
 
 ### Changed
